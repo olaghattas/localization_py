@@ -1,4 +1,6 @@
 from setuptools import setup
+# import os
+# from glob import glob
 
 package_name = 'localization_aptags'
 
@@ -10,6 +12,8 @@ setup(
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
         ('share/' + package_name, ['package.xml']),
+        ('share/' + package_name, ['config/transforms.json']),
+        #(os.path.join('share', package_name, 'yolodata'), glob('yolodata/*')),
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -20,6 +24,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'get_pose = localization_aptags.get_pose:main',
         ],
     },
 )

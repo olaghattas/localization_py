@@ -7,16 +7,18 @@
   <maintainer email="olaghattas@hotmail.com">ola</maintainer>
   <license>TODO: License declaration</license>
 
-  <build_depend>apriltag_msgs</build_depend>
-  <build_depend>apriltag_ros</build_depend>
-
   <depend>apriltag_msgs</depend>
   <depend>apriltag_ros</depend>
 
+  <depend>tf_transformations</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2_ros</depend>
+
+  <build_depend>ament_index_cpp</build_depend>
+  <exec_depend>ament_index_cpp</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
 
   <exec_depend>rclpy</exec_depend>
-
-  <exec_depend>geometry_msgs</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
