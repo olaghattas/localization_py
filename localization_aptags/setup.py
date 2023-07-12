@@ -25,6 +25,7 @@ setup(
     entry_points={
         'console_scripts': [
             'get_pose = localization_aptags.get_pose:main',
+            'pid_aptags = localization_aptags.pid_aptags:main',
         ],
     },
 )
