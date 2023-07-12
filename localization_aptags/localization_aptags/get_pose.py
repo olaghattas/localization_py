@@ -3,8 +3,6 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
-from time import time
-
 from apriltag_msgs.msg import AprilTagDetectionArray, AprilTagDetection
 
 from tf2_ros import TransformException
@@ -131,7 +129,7 @@ class GetPose(Node):
             frame = "aptag_" + str_aptag   # from
 
             try:
-                transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time())
+                transformation = self.tf_buffer.lookup_transform(source_frame, frame, self.get_clock().now())
                 print('jsk', transformation)
 
                 translation = tr.translation_matrix(
@@ -160,7 +158,7 @@ class GetPose(Node):
                 frame = "tag_" + str(at.id)  # from
                 print(frame)
                 try:
-                    transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time())
+                    transformation = self.tf_buffer.lookup_transform(source_frame, frame, self.get_clock().now())
                     print('jsk', transformation)
 
                     translation = tr.translation_matrix(
@@ -221,7 +219,7 @@ class GetPose(Node):
 
             robot_pose = PoseWithCovarianceStamped()
 
-            current_time = time()
+            current_time = self.get_clock().now()
             robot_pose.header.stamp.sec = int(current_time)
             robot_pose.header.stamp.nanosec = int((current_time - int(current_time)) * 1e9)
             robot_pose.header.frame_id = "map"  # or frame_link

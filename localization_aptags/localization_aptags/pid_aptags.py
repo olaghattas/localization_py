@@ -3,8 +3,6 @@ from rclpy.node import Node
 
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 
-from time import time
-
 from apriltag_msgs.msg import AprilTagDetectionArray, AprilTagDetection
 
 from tf2_ros import TransformException
