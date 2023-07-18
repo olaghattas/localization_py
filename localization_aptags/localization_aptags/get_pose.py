@@ -20,6 +20,9 @@ import tf2_ros
 from geometry_msgs.msg import TransformStamped
 
 import math
+from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
+
+import yaml
 
 
 class GetPose(Node):
@@ -28,7 +31,7 @@ class GetPose(Node):
         super().__init__('get_pose')
         self.publisher_ = self.create_publisher(PoseWithCovarianceStamped, "robot_pose", 10)
         timer_period = 0.5  # seconds
-        self.timer = self.create_timer(timer_period, self.timer_callback)
+        # self.timer = self.create_timer(timer_period, self.timer_callback)
 
         self.subscription = self.create_subscription(AprilTagDetectionArray, '/apriltag_detections',
                                                      self.apriltag_callback, 10)
@@ -44,6 +47,7 @@ class GetPose(Node):
 
         # incase we decided to get this in another way
         self.t_cam_in_baselink = None
+        self.t_opcam_in_cam = None
         self.apriltag_to_world_convention = None
 
     # transformation between realsense and base_link
@@ -82,7 +86,7 @@ class GetPose(Node):
 
         static_transform.transform.translation.x = robot_pose_aptags[0]  # Set translation values
         static_transform.transform.translation.y = robot_pose_aptags[1]
-        static_transform.transform.translation.z = 0.5 # meters
+        static_transform.transform.translation.z = 0.5  # meters
         static_transform.transform.rotation.w = robot_pose_aptags[2]
 
         self.tf_broadcaster.sendTransform(static_transform)
@@ -92,6 +96,13 @@ class GetPose(Node):
             [1.0, 0.0, 0.0, 0.0],
             [0.0, 0.0, 1.0, 0.0],
             [0.0, -1.0, 0.0, 0.4],
+            [0.0, 0.0, 0.0, 1.0]
+        ])
+
+        self.t_opcam_in_cam = np.array([
+            [0.0, 0.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0, 0.0],
+            [0.0, -1.0, 0.0, 0.0],
             [0.0, 0.0, 0.0, 1.0]
         ])
 
@@ -119,17 +130,16 @@ class GetPose(Node):
             # Get the homogeneous transformation matrix
             transform_aptag_in_world = np.dot(translation, rotation)
             self.transform_aptag_in_world_dict[aptag_id] = transform_aptag_in_world
-        # print(self.transform_aptag_in_world_dict)
+        print(self.transform_aptag_in_world_dict)
 
     def get_transform_matrix_aptags_from_tf(self):
-
         for aptag in self.used_apriltags:
             str_aptag = str(aptag)
-            source_frame = "map" # to
-            frame = "aptag_" + str_aptag   # from
+            source_frame = "map"  # to
+            frame = "aptag_" + str_aptag  # from
 
             try:
-                transformation = self.tf_buffer.lookup_transform(source_frame, frame, self.get_clock().now())
+                transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time())
                 print('jsk', transformation)
 
                 translation = tr.translation_matrix(
@@ -142,12 +152,47 @@ class GetPose(Node):
                 transform_aptag_in_world = np.dot(translation, rotation)
                 self.transform_aptag_in_world_dict[str_aptag] = transform_aptag_in_world
 
-            except TransformException as ex:
+            except (LookupException, ConnectivityException, ExtrapolationException):
+                self.get_logger().info('transform not ready')
                 self.get_logger().info(
-                    f'Could not transform {frame} to {source_frame}: {ex}')
+                    f'Could not transform {frame} to {source_frame}')
+                # raise
                 return
 
             print('self.transform_aptag_in_cam_dict', self.transform_aptag_in_cam_dict)
+
+    def get_transform_matrix_aptags_from_yaml_file(self):
+        share_directory = get_package_share_directory('localization_aptags')
+        # Accessing a file in the package's share directory
+        file_path = os.path.join(share_directory, 'transform_matrices_dictionary.yaml')
+
+        # Load YAML file
+        with open(file_path, 'r') as file:
+            yaml_data = yaml.safe_load(file)
+
+        # Initialize dictionary
+        transformations_dict = {}
+
+        # Extract transformations from YAML data
+        transformations = yaml_data['transformations']
+        for transformation in transformations:
+            # Extract ID and matrix
+
+            # to stop from using same apriltag id twice
+            matrix_id = transformation['id']
+            if matrix_id in self.transform_aptag_in_world_dict.keys():
+                self.get_logger().info("Apriltag with id " + str(matrix_id) + " already in use")
+                continue
+
+            matrix = transformation['matrix']
+            # Convert to numpy array
+            matrix_np = np.array(matrix)
+
+            # Store in dictionary
+            self.transform_aptag_in_world_dict[matrix_id] = matrix_np
+
+        # Print the dictionary
+        print("Transformations dictionary:\n", self.transform_aptag_in_world_dict)
 
     def apriltag_callback(self, msg):
         if msg.detections:
@@ -158,7 +203,7 @@ class GetPose(Node):
                 frame = "tag_" + str(at.id)  # from
                 print(frame)
                 try:
-                    transformation = self.tf_buffer.lookup_transform(source_frame, frame, self.get_clock().now())
+                    transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time())
                     print('jsk', transformation)
 
                     translation = tr.translation_matrix(

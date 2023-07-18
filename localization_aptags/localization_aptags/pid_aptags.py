@@ -11,14 +11,12 @@ from tf2_ros.transform_listener import TransformListener
 
 import tf_transformations as tr
 import numpy as np
-import json
-from pyquaternion import Quaternion
 import os
 from ament_index_python.packages import get_package_share_directory
 
 import tf2_ros
 from geometry_msgs.msg import TransformStamped
-
+from tf2_ros import LookupException, ConnectivityException, ExtrapolationException
 import math
 
 
@@ -59,6 +57,13 @@ class GetPose(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.tf_broadcaster = tf2_ros.StaticTransformBroadcaster(self)
 
+        self.t_opcam_in_cam = np.array([
+            [0.0, 0.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0, 0.0],
+            [0.0, -1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0]
+        ])
+
         kp = 0.05
         ki = 0.1
         kd = 0.3
@@ -73,7 +78,7 @@ class GetPose(Node):
         if not self.detected:
             self.move = False
             self.spin = True
-        elif self.detected and self.dist_to_tag < 1.5:  # limit set baseed on trials
+        elif self.detected and self.dist_to_tag < 0.3:  # limit set based on trials
             self.move = False
             self.spin = True
         else:
@@ -97,7 +102,7 @@ class GetPose(Node):
 
     def spinning(self):
         # adjust the velocity message
-        self.vel.angular.z = 0.05
+        self.vel.angular.z = 0.2
         self.vel.linear.x = 0.0
         # publish it
         self.pub.publish(self.vel)
@@ -111,11 +116,20 @@ class GetPose(Node):
                 frame = "tag_" + str(at.id)  # from
                 print(frame)
                 try:
-                    transformation = self.tf_buffer.lookup_transform(source_frame, frame, self.get_clock().now())
-                    print('jsk', transformation)
+                    transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time())
+                    # Given translation vector
+                    translation_vector = np.array([
+                        transformation.transform.translation.x,
+                        transformation.transform.translation.y,
+                        transformation.transform.translation.z,
+                    ])
+                    # Convert translation vector to 4x1 column vector
+                    translation_vector_4x1 = np.append(translation_vector, 1.0)
+                    # Apply transformation
+                    transformed_vector = np.dot(self.t_opcam_in_cam, translation_vector_4x1)
 
-                    self.ap = [transformation.transform.translation.x, transformation.transform.translation.y,
-                               transformation.transform.translation.z]
+                    # Extract the transformed values
+                    self.ap = [transformed_vector[0], transformed_vector[1], transformed_vector[2]]
                     self.detected = True
                     self.dist_to_tag = self.get_dist()
                 except TransformException as ex:
@@ -132,7 +146,7 @@ class GetPose(Node):
         if current_error is not None:
             self.vel.linear.x = 0.25
             current_time = self.get_clock().now()
-            dt = (current_time - self.saved_time).to_sec()
+            dt = (current_time - self.saved_time).nanoseconds / 1e9
             pid_output = self.velocity_control(current_error, dt, self.prev_error)
             # print("pid_output ", pid_output)
             self.vel.angular.z = pid_output
