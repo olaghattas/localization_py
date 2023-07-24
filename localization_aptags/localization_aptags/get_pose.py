@@ -51,7 +51,15 @@ class GetPose(Node):
         self.closest_aptag = None
         self.cam_to_base_link = None
 
-    def publish_tf(self, x, y, z, quat_, child_frame_id, frame_id):
+    def publish_tf(self, x, y, z, rot_mat, child_frame_id, frame_id):
+
+        quat = Quaternion()
+        quat_ = self.rotation_matrix_to_quaternion(np.array(rot_mat))
+        quat.x = quat_[0]
+        quat.y = quat_[1]
+        quat.z = quat_[2]
+        quat.w = quat_[3]
+
         static_transform = TransformStamped()
         static_transform.header.stamp = self.get_clock().now().to_msg()
         static_transform.header.frame_id = frame_id
@@ -61,7 +69,7 @@ class GetPose(Node):
         static_transform.transform.translation.y = y
         static_transform.transform.translation.z = z  # meters
 
-        static_transform.transform.rotation = quat_
+        static_transform.transform.rotation = quat
         # print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         self.tf_broadcaster.sendTransform(static_transform)
         print(f'publishing child {child_frame_id} from {frame_id}')
@@ -224,20 +232,16 @@ class GetPose(Node):
             t_apriltag_to_world = transform_aptag_in_world_dict[aptag]
             t_apriltag_in_camera = transform_aptag_in_cam_dict[aptag]
 
-            t_robot_in_world = np.dot(t_apriltag_to_world, np.linalg.inv(t_apriltag_in_camera))
-            # t_robot_in_world = np.dot(t_cam_in_world, np.linalg.inv(self.cam_to_base_link))
+            t_cam_in_world = np.dot(t_apriltag_to_world, np.linalg.inv(t_apriltag_in_camera))
 
-            # debugging
-            # t_robot_in_world = t_cam_in_world
+            transform_cam_to_base_link = np.array([[0.0, 0.0, 1.0, 0.0],
+                                                   [-1.0, 0.0, 0.0, 0.0],
+                                                   [0.0, -1.0, 0.0, 0.0],
+                                                   [0.0, 0.0, 0.0, 1.0]])
+            self.publish_tf(transform_cam_to_base_link[0, 3], transform_cam_to_base_link[1, 3], transform_cam_to_base_link[2, 3], transform_cam_to_base_link[:3,:3],
+                            'camera_color_optical_frame', 'base_link')
 
-            # Extract the rotation matrix and translation vector
-
-            # rotation_matrix = t_robot_in_world[:3, :3]
-            # translation_vector = t_robot_in_world[:3, 3]
-            #
-            # quaternion = self.rotation_matrix_to_quaternion(rotation_matrix)
-            # self.publish_tf(translation_vector[0], translation_vector[1], translation_vector[2], quaternion, str(aptag), 'map')
-            # # Extract the robot coordinates and rotation from the transformation matrix
+            t_robot_in_world = np.dot(t_cam_in_world, transform_cam_to_base_link.T)
 
             robot_x = t_robot_in_world[0, 3]
             robot_y = t_robot_in_world[1, 3]
@@ -265,45 +269,14 @@ class GetPose(Node):
         # if apriltags are detected im the scene
         print('self.transform_aptag_in_world_dict', self.transform_aptag_in_world_dict)
         print('ddfgdfrgarswftwewecsd,', self.cam_to_base_link)
-        if self.transform_aptag_in_cam_dict and self.transform_aptag_in_world_dict and self.cam_to_base_link is not None:
+        if self.transform_aptag_in_cam_dict and self.transform_aptag_in_world_dict:
             # publish the pose that can be subscribed to by nav2 for initial position or we can change setup to service
             robot_pose_aptags, rotation_matrix = self.transform_cam_world_frame()
 
-            t_robot_in_world = np.eye(4)
-            # Set the rotation matrix (top-left 3x3 block)
-            t_robot_in_world[:3, :3] = rotation_matrix
-            # Set the robot position (top-right 3x1 block)
-            t_robot_in_world[:3, 3] = robot_pose_aptags
-            # Set the last element to 1
-            t_robot_in_world[3, 3] = 1
-
-            transform_cam_to_base_link = np.array([[0.0, 0.0, 1.0, 0.0],
-                                                   [-1.0, 0.0, 0.0, 0.0],
-                                                   [0.0, -1.0, 0.0, 0.0],
-                                                   [0.0, 0.0, 0.0, 1.0]])
-            print('rotation_matrix',  rotation_matrix)
-            t_robot_real_in_world = np.dot(t_robot_in_world, transform_cam_to_base_link.T)
-
-
-            quat__ = Quaternion()
-            quat___ = self.rotation_matrix_to_quaternion(np.array(t_robot_real_in_world[:3, :3]))
-            quat__.x = quat___[0]
-            quat__.y = quat___[1]
-            quat__.z = quat___[2]
-            quat__.w = quat___[3]
-
-            quat = Quaternion()
-            quat_ = self.rotation_matrix_to_quaternion(np.array(rotation_matrix))
-            quat.x = quat_[0]
-            quat.y = quat_[1]
-            quat.z = quat_[2]
-            quat.w = quat_[3]
-
             self.publish_pose(robot_pose_aptags, rotation_matrix)
-            self.publish_tf(robot_pose_aptags[0], robot_pose_aptags[1], robot_pose_aptags[2], quat,
-                            'camera_color_optical_frame', 'map')
-            self.publish_tf(t_robot_real_in_world[0, 3], t_robot_real_in_world[1, 3], t_robot_real_in_world[2, 3], quat__,
+            self.publish_tf(robot_pose_aptags[0], robot_pose_aptags[1], robot_pose_aptags[2], rotation_matrix,
                             'base_link', 'map')
+
 
         else:
             if not self.transform_aptag_in_cam_dict:
@@ -376,7 +349,7 @@ def main(args=None):
     rclpy.init(args=args)
     get_pose = GetPose()
     # while get_pose.cam_to_base_link is None:
-    get_pose.get_transform_matrix_cam_to_base_link()
+    # get_pose.get_transform_matrix_cam_to_base_link()
     get_pose.get_transform_matrix_aptags_from_tf()
     # print('&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&', get_pose.transform_aptag_in_world_dict )
 
