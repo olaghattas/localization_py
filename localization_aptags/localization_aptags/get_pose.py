@@ -51,11 +51,11 @@ class GetPose(Node):
         self.closest_aptag = None
         self.cam_to_base_link = None
 
-    def publish_tf(self, x, y, z, quat_, frame_id):
+    def publish_tf(self, x, y, z, quat_, child_frame_id, frame_id):
         static_transform = TransformStamped()
         static_transform.header.stamp = self.get_clock().now().to_msg()
-        static_transform.header.frame_id = 'map'
-        static_transform.child_frame_id = frame_id
+        static_transform.header.frame_id = frame_id
+        static_transform.child_frame_id = child_frame_id
 
         static_transform.transform.translation.x = x  # Set translation values
         static_transform.transform.translation.y = y
@@ -64,6 +64,7 @@ class GetPose(Node):
         static_transform.transform.rotation = quat_
         # print('%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%')
         self.tf_broadcaster.sendTransform(static_transform)
+        print(f'publishing child {child_frame_id} from {frame_id}')
 
     def get_dist(self, x, y, z):
         return np.linalg.norm([x, y, z])
@@ -106,26 +107,39 @@ class GetPose(Node):
         source_frame = "base_link"  # from
 
         try:
-            transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
-                                                             timeout=rclpy.duration.Duration(seconds=5.0))
+            # transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
+            #                                                  timeout=rclpy.duration.Duration(seconds=5.0))
+            ## TODO check why trasnformation from tf broadcast is wrong
+            # translation = tr.translation_matrix(
+            #     [transformation.transform.translation.x, transformation.transform.translation.y,
+            #      transformation.transform.translation.z])
 
-            translation = tr.translation_matrix(
-                [transformation.transform.translation.x, transformation.transform.translation.y,
-                 transformation.transform.translation.z])
-            rotation = tr.quaternion_matrix(
-                [transformation.transform.rotation.x, transformation.transform.rotation.y,
-                 transformation.transform.rotation.z, transformation.transform.rotation.w])
+            # rotation = tr.quaternion_matrix(
+            #     [transformation.transform.rotation.x, transformation.transform.rotation.y,
+            #      transformation.transform.rotation.z, transformation.transform.rotation.w])
+
             # Get the homogeneous transformation matrix
-            transform_cam_to_base_link = np.dot(translation, rotation)
+            # transform_cam_to_base_link = np.dot(translation, rotation)
+
+            transform_cam_to_base_link = np.array([[0.0, 0.0, 1.0, 0.0],
+                                                   [1.0, 0.0, 0.0, 0.0],
+                                                   [0.0, -1.0, 0.0, 0.0],
+                                                   [0.0, 0.0, 0.0, 1.0]])
             self.cam_to_base_link = transform_cam_to_base_link
+            quat = Quaternion()
+            quat.x = 0.5
+            quat.y = -0.5
+            quat.z = 0.5
+            quat.w = 0.5
+            # self.publish_tf( 0.0, 0.0, 0.0, quat, 'camera_color_optical_frame', 'base_link')
             # self.get_logger().info(f'transform ready from {frame} to {source_frame}')
-            # print(self.cam_to_base_link)
+            print('cam_to_base_link dfgbsfdbsfdbsfgdbsfgdbsfdbdag456t24tgregdfs', self.cam_to_base_link)
 
         except (LookupException, ConnectivityException, ExtrapolationException):
             pass
-            # self.get_logger().info('transform not ready')
-            # self.get_logger().info(
-            #     f'Could not transform {frame} to {source_frame}')
+            self.get_logger().info('transform not ready')
+            self.get_logger().info(
+                f'Could not transform {frame} to {source_frame}')
             # # raise
 
     def apriltag_callback(self, msg):
@@ -136,7 +150,7 @@ class GetPose(Node):
             for at in msg.detections:
 
                 frame = "tag_" + str(at.id)  # from
-                print(frame)
+                # print(frame)
                 try:
                     transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
                                                                      timeout=rclpy.duration.Duration(seconds=1.0))
@@ -153,21 +167,22 @@ class GetPose(Node):
                     rotation = tr.quaternion_matrix(
                         [transformation.transform.rotation.x, transformation.transform.rotation.y,
                          transformation.transform.rotation.z, transformation.transform.rotation.w])
-                    print('source', source_frame, 'frame', frame, 'rotation', rotation)
+                    # print('source', source_frame, 'frame', frame, 'rotation', rotation)
                     # Get the homogeneous transformation matrix
                     transform_aptag_in_cam = np.dot(translation, rotation)
 
                     self.transform_aptag_in_cam_dict[at.id] = transform_aptag_in_cam
+                    print('self.transform_aptag_in_cam_dict[at.id]', self.transform_aptag_in_cam_dict[at.id])
                     # self.get_logger().info(f'transform ready from {frame} to {source_frame}')
 
                 except TransformException as ex:
 
-                    pass
-                    # self.get_logger().info(
-                    #     f'Could not transform {frame} to {source_frame}: {ex}')
+                    # pass
+                    self.get_logger().info(
+                        f'Could not transform {frame} to {source_frame}: {ex}')
         else:
-            pass
-            # print('No aptags from callback')
+            # pass
+            print('No aptags from callback')
 
     def rotation_matrix_to_quaternion(self, R):
         # Convert a 3x3 rotation matrix to a Quaternion
@@ -205,13 +220,12 @@ class GetPose(Node):
         transform_aptag_in_world_dict = self.transform_aptag_in_world_dict
 
         for aptag in transform_aptag_in_cam_dict.keys():
-            print(aptag)
+            # print(aptag)
             t_apriltag_to_world = transform_aptag_in_world_dict[aptag]
             t_apriltag_in_camera = transform_aptag_in_cam_dict[aptag]
 
-            t_cam_in_world = np.dot(t_apriltag_to_world, np.linalg.inv(t_apriltag_in_camera))
+            t_robot_in_world = np.dot(t_apriltag_to_world, np.linalg.inv(t_apriltag_in_camera))
             # t_robot_in_world = np.dot(t_cam_in_world, np.linalg.inv(self.cam_to_base_link))
-            t_robot_in_world = t_cam_in_world
 
             # debugging
             # t_robot_in_world = t_cam_in_world
@@ -222,7 +236,7 @@ class GetPose(Node):
             # translation_vector = t_robot_in_world[:3, 3]
             #
             # quaternion = self.rotation_matrix_to_quaternion(rotation_matrix)
-            # self.publish_tf(translation_vector[0], translation_vector[1], translation_vector[2], quaternion, str(aptag))
+            # self.publish_tf(translation_vector[0], translation_vector[1], translation_vector[2], quaternion, str(aptag), 'map')
             # # Extract the robot coordinates and rotation from the transformation matrix
 
             robot_x = t_robot_in_world[0, 3]
@@ -249,9 +263,34 @@ class GetPose(Node):
         # self.get_transform_aptags_debug()
 
         # if apriltags are detected im the scene
+        print('self.transform_aptag_in_world_dict', self.transform_aptag_in_world_dict)
+        print('ddfgdfrgarswftwewecsd,', self.cam_to_base_link)
         if self.transform_aptag_in_cam_dict and self.transform_aptag_in_world_dict and self.cam_to_base_link is not None:
             # publish the pose that can be subscribed to by nav2 for initial position or we can change setup to service
             robot_pose_aptags, rotation_matrix = self.transform_cam_world_frame()
+
+            t_robot_in_world = np.eye(4)
+            # Set the rotation matrix (top-left 3x3 block)
+            t_robot_in_world[:3, :3] = rotation_matrix
+            # Set the robot position (top-right 3x1 block)
+            t_robot_in_world[:3, 3] = robot_pose_aptags
+            # Set the last element to 1
+            t_robot_in_world[3, 3] = 1
+
+            transform_cam_to_base_link = np.array([[0.0, 0.0, 1.0, 0.0],
+                                                   [-1.0, 0.0, 0.0, 0.0],
+                                                   [0.0, -1.0, 0.0, 0.0],
+                                                   [0.0, 0.0, 0.0, 1.0]])
+            print('rotation_matrix',  rotation_matrix)
+            t_robot_real_in_world = np.dot(t_robot_in_world, transform_cam_to_base_link.T)
+
+
+            quat__ = Quaternion()
+            quat___ = self.rotation_matrix_to_quaternion(np.array(t_robot_real_in_world[:3, :3]))
+            quat__.x = quat___[0]
+            quat__.y = quat___[1]
+            quat__.z = quat___[2]
+            quat__.w = quat___[3]
 
             quat = Quaternion()
             quat_ = self.rotation_matrix_to_quaternion(np.array(rotation_matrix))
@@ -261,10 +300,19 @@ class GetPose(Node):
             quat.w = quat_[3]
 
             self.publish_pose(robot_pose_aptags, rotation_matrix)
-            self.publish_tf(robot_pose_aptags[0], robot_pose_aptags[1], robot_pose_aptags[2], quat, 'base_link')
+            self.publish_tf(robot_pose_aptags[0], robot_pose_aptags[1], robot_pose_aptags[2], quat,
+                            'camera_color_optical_frame', 'map')
+            self.publish_tf(t_robot_real_in_world[0, 3], t_robot_real_in_world[1, 3], t_robot_real_in_world[2, 3], quat__,
+                            'base_link', 'map')
 
         else:
-            self.get_logger().info('NO apriltags detected')
+            if not self.transform_aptag_in_cam_dict:
+                self.get_logger().info('NO apriltags detected')
+            if not self.transform_aptag_in_world_dict:
+                self.get_logger().info('NO transform_aptag_in_world_dict')
+            if self.cam_to_base_link is None:
+                self.get_logger().info('NO transformation cam_to_base_link')
+            # self.get_logger().info('timer_callback failed')
 
     def publish_pose(self, robot_pose_aptags, rotation_matrix):
 
@@ -327,9 +375,8 @@ class GetPose(Node):
 def main(args=None):
     rclpy.init(args=args)
     get_pose = GetPose()
-    while get_pose.cam_to_base_link is None:
-        get_pose.get_transform_matrix_cam_to_base_link()
-
+    # while get_pose.cam_to_base_link is None:
+    get_pose.get_transform_matrix_cam_to_base_link()
     get_pose.get_transform_matrix_aptags_from_tf()
     # print('&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&', get_pose.transform_aptag_in_world_dict )
 
