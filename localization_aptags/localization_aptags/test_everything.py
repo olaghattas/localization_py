@@ -7,22 +7,22 @@ import os
 # #                        [0, fy, cy],
 # #                        [0, 0, 1]])
 
-def plot_on_image(x_1 ,y_1 ):
+def plot_on_image(x_1 ,y_1, x_real, y_real ):
     # Step 1: Read the image using OpenCV
-    path = os.environ["HOME"] + "/smart_home/src/smart-home/external/human_pose_detection/pose_detection/pose_images_for_debug/"  # Replace with the actual path to your image
-    image_name = '939_497' + ".png"
+
+    ### SPECIFIC PATH
+    path = os.environ["HOME"] + "/smart-home/src/smart-home/external/human_pose_detection/pose_detection/pose_images_for_debug/"  # Replace with the actual path to your image
+    # image_name = '1618_611' + ".png"
+    # image_name = '1618_611' + ".png"
+    image_name = '724_636' + ".png"
     image_path = path + image_name
     image = cv2.imread(image_path)
-
-    # Specify the coordinates of the real point (in pixel values)
-    x = 933
-    y = 498
 
     #Draw the point on the image
     point_color = (0, 0, 255)  # Red color in BGR format
     point_radius = 5          # Radius of the point
     thickness = -1            # Thickness -1 fills the circle
-    cv2.circle(image, (x, y), point_radius, point_color, thickness)
+    cv2.circle(image, (x_real, y_real), point_radius, point_color, thickness)
 
     # projected pt
     # Draw the point on the image
@@ -90,20 +90,28 @@ def project_with_cv2():
     # K = np.array([[1759, 0.0, 0],
     #               [0.0, 989, 0.0],
     #               [0, 0, 1]])
-    K = np.array([[921.6875610351562, 0.0, 639.358154296875],
-                  [0.0, 921.7409057617188, 363.2638854980469],
+    K = np.array([[1510.42359328571, 0.0, 956.274149759222],
+                  [0.0, 1514.99036925224, 546.045450379061],
                   [0, 0, 1]])
 
 
-    knee_pixel_x = 933
-    knee_pixel_y = 498
-    # print('knee_2D_px', knee_2D_px)
+    # ## 1 advil
+    # knee_pixel_x = 1618
+    # knee_pixel_y = 611
+    # knee_camera_coordinates = np.array([[[1.3, 0.15, 2.92]]]).T
 
-    # in optical frame coordinates S1
+    # ## cream
+    knee_pixel_x = 724
+    knee_pixel_y = 636
+    knee_camera_coordinates = np.array([[[-0.4, 0.15, 2.8]]]).T
 
-    knee_camera_coordinates = np.array([[0.78, 0.1, 2.46]]).T
+    # ## SPF
+    # knee_pixel_x = 1126
+    # knee_pixel_y = 673
+    # knee_camera_coordinates = np.array([[[0.3, 0.15, 2.28]]]).T
+
     # dist_coeffs = np.array([k1, k2, p1, p2, k3])
-    dist_coeffs = np.array([[0, 0, 0, 0, 0]], dtype=np.float32)
+    dist_coeffs = np.array([[0.0177522271029360, -0.245387961307194, 0, 0, 0]], dtype=np.float32)
 
     # Extract rotation vector (rvec) and translation vector (tvec)
     # # rvec = cv2.Rodrigues(w_T_cam[:3, :3])[0]
@@ -121,7 +129,7 @@ def project_with_cv2():
     # Calculate the pixel coordinate difference
     pixel_diff_x = projected_knee_pixel_x - knee_pixel_x
     pixel_diff_y = projected_knee_pixel_y - knee_pixel_y
-    plot_on_image(projected_knee_pixel_x, projected_knee_pixel_y)
+    plot_on_image(projected_knee_pixel_x, projected_knee_pixel_y, knee_pixel_x, knee_pixel_y)
 
     # Print the results
     print("Detected knee joint in image (x, y):", knee_pixel_x, knee_pixel_y)
@@ -129,32 +137,33 @@ def project_with_cv2():
     print("Pixel coordinate difference (x, y):", pixel_diff_x, pixel_diff_y)
 
 def project_with_librealsense_rsutil():
-    knee_pixel_x = 933
-    knee_pixel_y = 498
+    knee_pixel_x = 724
+    knee_pixel_y = 636
 
-    fx = 921.6875610351562
-    fy = 921.7409057617188
+    fx = 1510.42359328571
+    fy = 1514.99036925224
 
     # px = 639.358154296875
     # py = 363.2638854980469
 
-    px = 1280/2
-    py = 720/2
+    px = 956.274149759222
+    py = 546.045450379061
     # print('knee_2D_px', knee_2D_px)
 
     # in optical frame coordinates S1
-    knee_camera_coordinates = [0.78, 0.1, 2.46]
+    knee_camera_coordinates = [-0.4, 0.15, 2.8]
     x = knee_camera_coordinates[0]/knee_camera_coordinates[2]
     y = knee_camera_coordinates[1]/knee_camera_coordinates[2]
 
-    r2  = x*x + y*y;
-    f = 1 + intrin->coeffs[0]*r2 + intrin->coeffs[1]*r2*r2 + intrin->coeffs[4]*r2*r2*r2;
-    x *= f;
-    y *= f;
-    float dx = x + 2*intrin->coeffs[2]*x*y + intrin->coeffs[3]*(r2 + 2*x*x);
-    float dy = y + 2*intrin->coeffs[3]*x*y + intrin->coeffs[2]*(r2 + 2*y*y);
-    x = dx;
-    y = dy;
+    dist_coeffs = np.array([0.0177522271029360, -0.245387961307194, 0, 0, 0], dtype=np.float32)
+    r2 = x*x + y*y
+    f = 1 + dist_coeffs[0]*r2 + dist_coeffs[1]*r2*r2 + dist_coeffs[4]*r2*r2*r2
+    x = f * x
+    y = f * x
+    dx = x + 2*dist_coeffs[2]*x*y + dist_coeffs[3]*(r2 + 2*x*x)
+    dy = y + 2*dist_coeffs[3]*x*y + dist_coeffs[2]*(r2 + 2*y*y)
+    x = dx
+    y = dy
 
     # Compare the projected point with the detected knee joint
     projected_knee_pixel_x = x * fx + px
@@ -163,11 +172,13 @@ def project_with_librealsense_rsutil():
     # Calculate the pixel coordinate difference
     pixel_diff_x = projected_knee_pixel_x - knee_pixel_x
     pixel_diff_y = projected_knee_pixel_y - knee_pixel_y
-    plot_on_image(projected_knee_pixel_x, projected_knee_pixel_y)
+    plot_on_image(projected_knee_pixel_x, projected_knee_pixel_y, knee_pixel_x, knee_pixel_y)
 
     # Print the results
     print("Detected knee joint in image (x, y):", knee_pixel_x, knee_pixel_y)
     print("Projected knee joint in image (x, y):", projected_knee_pixel_x, projected_knee_pixel_y)
     print("Pixel coordinate difference (x, y):", pixel_diff_x, pixel_diff_y)
 
+
+# project_with_cv2()
 project_with_librealsense_rsutil()
