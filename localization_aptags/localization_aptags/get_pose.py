@@ -42,7 +42,7 @@ class GetPose(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
-        self.used_apriltags = [0, 2, 13]  # add the apriltag ids that you used
+        self.used_apriltags = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # add the apriltag ids that you used
 
         self.transform_aptag_in_cam_dict = {}  # location of apriltags in camera frame
         self.transform_aptag_in_world_dict = {}  # global location of apriltags
