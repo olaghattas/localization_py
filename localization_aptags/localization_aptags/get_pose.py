@@ -141,7 +141,7 @@ class GetPose(Node):
             quat.w = 0.5
             # self.publish_tf( 0.0, 0.0, 0.0, quat, 'camera_color_optical_frame', 'base_link')
             # self.get_logger().info(f'transform ready from {frame} to {source_frame}')
-            print('cam_to_base_link dfgbsfdbsfdbsfgdbsfgdbsfdbdag456t24tgregdfs', self.cam_to_base_link)
+            print('cam_to_base_link', self.cam_to_base_link)
 
         except (LookupException, ConnectivityException, ExtrapolationException):
             pass
