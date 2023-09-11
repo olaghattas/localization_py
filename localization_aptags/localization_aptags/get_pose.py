@@ -31,7 +31,7 @@ class GetPose(Node):
     def __init__(self):
         super().__init__('get_pose')
         # quaternion PoseWithCovarianceStamped
-        self.publisher_ = self.create_publisher(PoseWithCovarianceStamped, "robot_pose", 10)
+        self.publisher_ = self.create_publisher(PoseWithCovarianceStamped, "initialpose", 10)
         timer_period = 0.5  # seconds
         self.timer = self.create_timer(timer_period, self.timer_callback)
 
@@ -42,6 +42,7 @@ class GetPose(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self, spin_thread=True)
 
+        # self.used_apriltags = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # add the apriltag ids that you used
         self.used_apriltags = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # add the apriltag ids that you used
 
         self.transform_aptag_in_cam_dict = {}  # location of apriltags in camera frame
@@ -83,9 +84,11 @@ class GetPose(Node):
 
             str_aptag = str(aptag)
             source_frame = "map"  # to
+            # source_frame = "unity"  # to in sim
             frame = "aptag_" + str_aptag  # from
 
             try:
+                print('############ APTAG ########' + str_aptag )
                 transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
                                                                  timeout=rclpy.duration.Duration(seconds=5.0))
 
@@ -239,7 +242,7 @@ class GetPose(Node):
                                                    [0.0, -1.0, 0.0, 0.0],
                                                    [0.0, 0.0, 0.0, 1.0]])
             self.publish_tf(transform_cam_to_base_link[0, 3], transform_cam_to_base_link[1, 3], transform_cam_to_base_link[2, 3], transform_cam_to_base_link[:3,:3],
-                            'camera_color_optical_frame', 'base_link')
+                            'camera_color_optical_frame', 'base_link_')
 
             t_robot_in_world = np.dot(t_cam_in_world, transform_cam_to_base_link.T)
 
@@ -275,10 +278,13 @@ class GetPose(Node):
 
             self.publish_pose(robot_pose_aptags, rotation_matrix)
             self.publish_tf(robot_pose_aptags[0], robot_pose_aptags[1], robot_pose_aptags[2], rotation_matrix,
-                            'base_link', 'map')
+                            'base_link_', 'map')
+            # self.publish_tf(robot_pose_aptags[0], robot_pose_aptags[1], robot_pose_aptags[2], rotation_matrix,
+            #                 'base_link_', 'unity')
 
 
         else:
+            print('sdjncjds', self.transform_aptag_in_cam_dict)
             if not self.transform_aptag_in_cam_dict:
                 self.get_logger().info('NO apriltags detected')
             if not self.transform_aptag_in_world_dict:
@@ -301,6 +307,7 @@ class GetPose(Node):
         robot_pose.header.stamp = self.get_clock().now().to_msg()
 
         robot_pose.header.frame_id = "map"  # or frame_link
+        # robot_pose.header.frame_id = "unity"  # or frame_link
 
         robot_pose.pose.pose.position.x = robot_pose_aptags[0]
         robot_pose.pose.pose.position.y = robot_pose_aptags[1]

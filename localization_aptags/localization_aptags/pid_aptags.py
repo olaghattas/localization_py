@@ -44,7 +44,6 @@ class GetPose(Node):
         super().__init__('get_pose')
         self.pub = self.create_publisher(Twist, "cmd_vel", 1)
 
-        self.spin = True
         self.move = False
         self.vel = Twist()
         self.prev_error = 0
