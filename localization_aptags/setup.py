@@ -28,6 +28,7 @@ setup(
             'get_pose = localization_aptags.get_pose:main',
             'pid_aptags = localization_aptags.pid_aptags:main',
             'localize = localization_aptags.localize:main',
+            'localize_test = localization_aptags.localize_test:main',
         ],
     },
 )

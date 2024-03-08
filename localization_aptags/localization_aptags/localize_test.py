@@ -50,8 +50,32 @@ class LocalizationActionServer(Node):
         self.get_transform_matrix_aptags_in_world_from_tf()
         self.timer_period= 2.0 # seconds
         self.timer = self.create_timer(self.timer_period, self.localize)
+        self.publisher_initial_pose = self.create_publisher(PoseWithCovarianceStamped, "ola", 10)
+        self.covariance = [0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.06853892326654787]
 
 
+
+    def publish_pose(self, translation, rot_mat):
+        robot_pose = PoseWithCovarianceStamped()
+        quat_ = self.rotation_matrix_to_quaternion(np.array(rot_mat))
+        quat = Quaternion()
+        quat.x = quat_[0]
+        quat.y = quat_[1]
+        quat.z = quat_[2]
+        quat.w = quat_[3]
+
+        robot_pose.header.stamp = self.get_clock().now().to_msg()
+
+        robot_pose.header.frame_id = "map"  # or frame_link
+
+        robot_pose.pose.pose.position.x = translation[0]
+        robot_pose.pose.pose.position.y = translation[1]
+        robot_pose.pose.pose.position.z = translation[2]
+
+        robot_pose.pose.pose.orientation = quat
+        robot_pose.pose.covariance = self.covariance
+
+        self.publisher_initial_pose.publish(robot_pose)
 
     ##### Localization Part #####
     def publish_tf(self, x, y, z, rot_mat, child_frame_id, frame_id):
@@ -311,6 +335,8 @@ class LocalizationActionServer(Node):
                 # print("published_pose")
                 self.publish_tf(robot_pose_aptags[0], robot_pose_aptags[1], robot_pose_aptags[2], rotation_matrix,
                                 'base_link_ola', 'map')
+                self.publish_pose(robot_pose_aptags, rotation_matrix)
+
                 self.successfully_localized = True
 
                 return
