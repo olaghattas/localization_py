@@ -126,7 +126,6 @@ class LocalizationActionServer(Node):
         # robot_pose_gt = self.get_pose(translation, quaternion)
         # self.publisher_gt_2tf.publish(robot_pose_gt)
         # print("localizejfnasdklfbhsdgb")
-
         self.get_transf()
 
     def apriltag_callback(self, msg):
@@ -137,7 +136,7 @@ class LocalizationActionServer(Node):
             # source_frame = "base_link"  # to
 
             try:
-                source_frame = "tag_28"  # from
+                source_frame = "tag_15"  # from
                 transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
                                                                  timeout=rclpy.duration.Duration(
                                                                      seconds=1000.0))
@@ -152,24 +151,9 @@ class LocalizationActionServer(Node):
                 # Get the homogeneous transformation matrix
                 self.transform_cam_in_aptag = np.dot(translation, rotation)
 
-                ## since cam no longer in tf tree wrt base link correct
                 transformation = self.tf_buffer.lookup_transform(frame, "base_link", rclpy.time.Time(),
                                                                  timeout=rclpy.duration.Duration(
                                                                      seconds=1000.0))
-
-                # rotation_matrix = np.array([
-                #     [0.0, 0.0, 1.0],
-                #     [-1.0, 0.0, 0.0],
-                #     [0.0, -1.0, 0.0]])
-                # quat_ = self.rotation_matrix_to_quaternion(np.array(rotation_matrix))
-                # print("quat_", quat_)
-                # source = "base_link"
-                # frame = "new_cam"
-                # self.publish_tf([0.0, 0.0, 0.5], quat_, frame, source)
-                #
-                # transformation = self.tf_buffer.lookup_transform("new_cam", "base_link", rclpy.time.Time(),
-                #                                                  timeout=rclpy.duration.Duration(
-                #                                                      seconds=1000.0))
                 translation = tr.translation_matrix(
                     [transformation.transform.translation.x, transformation.transform.translation.y,
                      transformation.transform.translation.z])
@@ -188,7 +172,7 @@ class LocalizationActionServer(Node):
         ### THIS SHOULD HAVE A FLAG IF APRILTAG CALLBACK CALCULATE TF IS TRUE THEN DO THE CLACULATION BUT FIRST IJUST WANT TO CHECK IF THERE ARE TAGS DETECTED
 
         source_frame = "map"  # to
-        frame = "aptag_28"
+        frame = "aptag_15"
 
         transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
                                                          timeout=rclpy.duration.Duration(
@@ -225,7 +209,14 @@ class LocalizationActionServer(Node):
 
 
         ## test new cam location
-
+        rotation_matrix = np.array([
+            [0.0, 0.0, 1.0],
+            [-1.0, 0.0, 0.0],
+            [0.0, -1.0, 0.0]])
+        quat_ = self.rotation_matrix_to_quaternion(np.array(rotation_matrix))
+        source = "base_link"
+        frame = "new_cam"
+        self.publish_tf([0.0, 0.0, 0.5], quat_, frame, source)
 
         print("1555555")
         # translation = tr.translation_matrix(
