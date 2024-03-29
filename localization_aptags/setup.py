@@ -29,6 +29,7 @@ setup(
             'pid_aptags = localization_aptags.pid_aptags:main',
             'localize = localization_aptags.localize:main',
             'localize_test = localization_aptags.localize_test:main',
+            'localize_calibrate = localization_aptags.localize_calibrate_helper.py',
         ],
     },
 )

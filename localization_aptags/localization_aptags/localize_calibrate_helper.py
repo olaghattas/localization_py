@@ -34,7 +34,6 @@ class LocalizationActionServer(Node):
 
         self.publisher_gt = self.create_publisher(PoseWithCovarianceStamped, "ground_truth", 10)
         self.publisher_matrixmul = self.create_publisher(PoseWithCovarianceStamped, "matrix_cam", 10)
-        self.publisher_gt_2tf = self.create_publisher(PoseWithCovarianceStamped, "ground_truth_jjdj", 10)
         self.covariance = [0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                            0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                            0.06853892326654787]
@@ -47,6 +46,9 @@ class LocalizationActionServer(Node):
         self.transform_cam_in_aptag = None
         self.subscription = self.create_subscription(AprilTagDetectionArray, '/apriltag_detections',
                                                      self.apriltag_callback, 10)
+
+        # one to calibrate
+        self.tag_source ="tag_15"
 
     def get_pose(self, translation, quat_):
         robot_pose = PoseWithCovarianceStamped()
@@ -69,26 +71,6 @@ class LocalizationActionServer(Node):
 
         return robot_pose
 
-    # def publish_pose_inv(self, translation, quat_):
-    #     robot_pose = PoseWithCovarianceStamped()
-    #     quat = Quaternion()
-    #     quat.x = quat_[0]
-    #     quat.y = quat_[1]
-    #     quat.z = quat_[2]
-    #     quat.w = quat_[3]
-    #     robot_pose.header.stamp = self.get_clock().now().to_msg()
-    #     robot_pose.header.frame_id = "map"  # or frame_link
-    #
-    #     robot_pose.pose.pose.position.x = translation[0]
-    #     robot_pose.pose.pose.position.y = translation[1]
-    #     robot_pose.pose.pose.position.z = translation[1]
-    #
-    #     robot_pose.pose.pose.orientation = quat.inverse
-    #     robot_pose.pose.covariance = self.covariance
-    #
-    #     self.publisher_initial_pose.publish(robot_pose)
-
-    ##### Localization Part #####
     def publish_tf(self, translation, quat_, child_frame_id, frame_id):
         quat = Quaternion()
         quat.x = quat_[0]
@@ -134,61 +116,50 @@ class LocalizationActionServer(Node):
         print("aptag callbacl")
         if msg.detections:
             frame = msg.header.frame_id  # to
+
             # source_frame = "base_link"  # to
 
-            try:
-                source_frame = "tag_28"  # from
-                transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
-                                                                 timeout=rclpy.duration.Duration(
-                                                                     seconds=1000.0))
+            # try:
+            source_frame = self.tag_source  # from
 
-                translation = tr.translation_matrix(
-                    [transformation.transform.translation.x, transformation.transform.translation.y,
-                     transformation.transform.translation.z])
-                rotation = tr.quaternion_matrix(
-                    [transformation.transform.rotation.x, transformation.transform.rotation.y,
-                     transformation.transform.rotation.z, transformation.transform.rotation.w])
-                # print('source', source_frame, 'frame', frame, 'rotation', rotation)
-                # Get the homogeneous transformation matrix
-                self.transform_cam_in_aptag = np.dot(translation, rotation)
+            transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
+                                                             timeout=rclpy.duration.Duration(
+                                                                 seconds=100.0))
 
-                ## since cam no longer in tf tree wrt base link correct
-                transformation = self.tf_buffer.lookup_transform(frame, "base_link", rclpy.time.Time(),
-                                                                 timeout=rclpy.duration.Duration(
-                                                                     seconds=1000.0))
+            translation = tr.translation_matrix(
+                [transformation.transform.translation.x, transformation.transform.translation.y,
+                 transformation.transform.translation.z])
+            rotation = tr.quaternion_matrix(
+                [transformation.transform.rotation.x, transformation.transform.rotation.y,
+                 transformation.transform.rotation.z, transformation.transform.rotation.w])
+            # print('source', source_frame, 'frame', frame, 'rotation', rotation)
+            # Get the homogeneous transformation matrix
+            self.transform_cam_in_aptag = np.dot(translation, rotation)
 
-                # rotation_matrix = np.array([
-                #     [0.0, 0.0, 1.0],
-                #     [-1.0, 0.0, 0.0],
-                #     [0.0, -1.0, 0.0]])
-                # quat_ = self.rotation_matrix_to_quaternion(np.array(rotation_matrix))
-                # print("quat_", quat_)
-                # source = "base_link"
-                # frame = "new_cam"
-                # self.publish_tf([0.0, 0.0, 0.5], quat_, frame, source)
-                #
-                # transformation = self.tf_buffer.lookup_transform("new_cam", "base_link", rclpy.time.Time(),
-                #                                                  timeout=rclpy.duration.Duration(
-                #                                                      seconds=1000.0))
-                translation = tr.translation_matrix(
-                    [transformation.transform.translation.x, transformation.transform.translation.y,
-                     transformation.transform.translation.z])
-                rotation = tr.quaternion_matrix(
-                    [transformation.transform.rotation.x, transformation.transform.rotation.y,
-                     transformation.transform.rotation.z, transformation.transform.rotation.w])
-                # print('source', source_frame, 'frame', frame, 'rotation', rotation)
-                # Get the homogeneous transformation matrix
-                self.transform_base_in_cam = np.dot(translation, rotation)
+            ## since cam no longer in tf tree wrt base link correct
+            transformation = self.tf_buffer.lookup_transform(frame, "base_link", rclpy.time.Time(),
+                                                             timeout=rclpy.duration.Duration(
+                                                                 seconds=1000.0))
 
-            except Exception as ex:
-                # self.aptags_detected_inside_callback = False
-                self.get_logger().info(f'Error ***************: {ex}')
+            translation = tr.translation_matrix(
+                [transformation.transform.translation.x, transformation.transform.translation.y,
+                 transformation.transform.translation.z])
+            rotation = tr.quaternion_matrix(
+                [transformation.transform.rotation.x, transformation.transform.rotation.y,
+                 transformation.transform.rotation.z, transformation.transform.rotation.w])
+            # print('source', source_frame, 'frame', frame, 'rotation', rotation)
+            # Get the homogeneous transformation matrix
+            self.transform_base_in_cam = np.dot(translation, rotation)
+
+            # except Exception as ex:
+            #     # self.aptags_detected_inside_callback = False
+            #     self.get_logger().info(f'Error ***************: {ex}')
 
     def map_tag(self):
-        ### THIS SHOULD HAVE A FLAG IF APRILTAG CALLBACK CALCULATE TF IS TRUE THEN DO THE CLACULATION BUT FIRST IJUST WANT TO CHECK IF THERE ARE TAGS DETECTED
-
+        ### controlled by unity change postion until pose is aligned
+        ### THIS SHOULD HAVE A FLAG IF APRILTAG CALLBACK CALCULATE TF IS TRUE THEN DO THE CLACULATION BUT FIRST IJUST WANT TO CHECK IF THERE ARE TAGS DETECTED+
         source_frame = "map"  # to
-        frame = "aptag_28"
+        frame = "ap" + self.tag_source
 
         transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
                                                          timeout=rclpy.duration.Duration(
@@ -205,6 +176,7 @@ class LocalizationActionServer(Node):
 
     def get_transf(self):
         print("GET tRANS")
+        ### Get map and aptag location
         self.map_tag()
         if self.transform_aptag_in_world is not None and self.transform_cam_in_aptag is not None:
             self.cam_in_map = self.transform_aptag_in_world @ (self.transform_cam_in_aptag @ self.transform_base_in_cam)
@@ -218,25 +190,13 @@ class LocalizationActionServer(Node):
 
             ##################
 
+        ### Ground truth
         frame = "base_link"
         source_frame = "map"
         transformation = self.tf_buffer.lookup_transform(source_frame, frame, rclpy.time.Time(),
                                                          timeout=rclpy.duration.Duration(
                                                              seconds=1000.0))
 
-
-        ## test new cam location
-
-
-        print("1555555")
-        # translation = tr.translation_matrix(
-        #    )
-        # rotation = tr.quaternion_matrix(
-        #    )
-        # print('source', source_frame, 'frame', frame, 'rotation', rotation)
-        # Get the homogeneous trans [transformation.transform.rotation.x, transformation.transform.rotation.y,
-        #             #      transformation.transform.rotation.z, transformation.transform.rotation.w]formation matrix
-        # self.transform_cam_in_world= np.dot(translation, rotation)
         robot = self.get_pose([transformation.transform.translation.x, transformation.transform.translation.y,
                                transformation.transform.translation.z],
                               [transformation.transform.rotation.x, transformation.transform.rotation.y,
